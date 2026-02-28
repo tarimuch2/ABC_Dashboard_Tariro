@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory Command Center - ABC Logistics</title>
+
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+        }
+
+        nav {
+            background: #1e293b;
+            padding: 15px 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #e2e8f0;
+            border-bottom: 1px solid #334155;
+        }
+
+        nav .logo {
+            font-size: 22px;
+            font-weight: bold;
+            color: #38bdf8;
+        }
+
+        nav a {
+            color: #e2e8f0;
+            margin-left: 20px;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        nav a:hover {
+            color: #38bdf8;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 40px auto;
+            background: #1e293b;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
+
+        h2 {
+            margin-top: 0;
+            color: #38bdf8;
+        }
+
+        form {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        form input {
+            padding: 10px;
+            font-size: 14px;
+            flex: 1 1 200px;
+            border: 1px solid #475569;
+            border-radius: 6px;
+            background: #0f172a;
+            color: #e2e8f0;
+        }
+
+        form button {
+            padding: 10px 20px;
+            background: #38bdf8;
+            color: #0f172a;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            flex: 0 0 auto;
+        }
+
+        form button:hover {
+            background: #0ea5e9;
+        }
+
+        .actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 10px;
+        }
+
+        .clear-btn {
+            padding: 8px 16px;
+            background: #ef4444;
+            color: #0f172a;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        .clear-btn:hover {
+            background: #dc2626;
+        }
+
+        .error-message {
+            margin-bottom: 10px;
+            color: #fecaca;
+            background: #7f1d1d;
+            border: 1px solid #fecaca;
+            padding: 8px 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            display: none;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            color: #e2e8f0;
+        }
+
+        table th, table td {
+            padding: 12px;
+            border-bottom: 1px solid #334155;
+            text-align: left;
+        }
+
+        table th {
+            background: #334155;
+        }
+
+        #chartContainer {
+            margin-top: 40px;
+            background: #1e293b;
+            padding: 20px;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <div class="logo">ABC Logistics</div>
+        <div>
+            <a href="index.html">Dashboard</a>
+            <a href="about.html">Profile</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h2>Inventory Command Center</h2>
+
+        <div id="errorBox" class="error-message"></div>
+
+        <form id="itemForm">
+            <input type="text" id="itemName" placeholder="Item Name" required>
+            <input
+                type="number"
+                id="quantity"
+                placeholder="Quantity"
+                min="0"
+                required
+                oninput="this.value = this.value.replace(/[^0-9]/g, '')"
+            >
+            <button type="submit">Add Item</button>
+        </form>
+
+        <div class="actions">
+            <button class="clear-btn" id="clearAllBtn">Clear All Items</button>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Item Name</th>
+                    <th>Quantity</th>
+                </tr>
+            </thead>
+            <tbody id="inventoryTable"></tbody>
+        </table>
+
+        <div id="chartContainer">
+            <canvas id="inventoryChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('itemForm');
+        const tableBody = document.getElementById('inventoryTable');
+        const errorBox = document.getElementById('errorBox');
+        const clearAllBtn = document.getElementById('clearAllBtn');
+
+        let items = JSON.parse(localStorage.getItem('inventory')) || [];
+
+        function showError(message) {
+            errorBox.textContent = message;
+            errorBox.style.display = 'block';
+        }
+
+        function clearError() {
+            errorBox.textContent = '';
+            errorBox.style.display = 'none';
+        }
+
+        function renderTable() {
+            tableBody.innerHTML = "";
+            items.forEach(item => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${item.name}</td>
+                    <td>${item.quantity}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+
+        const ctx = document.getElementById('inventoryChart').getContext('2d');
+        let chart;
+
+        function renderChart() {
+            const labels = items.map(i => i.name);
+            const quantities = items.map(i => i.quantity);
+
+            const barColors = quantities.map(q => q < 10 ? '#ef4444' : '#38bdf8');
+
+            if (chart) chart.destroy();
+
+            chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Item Quantities',
+                        data: quantities,
+                        backgroundColor: barColors,
+                        borderColor: '#0f172a',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { color: '#e2e8f0' }
+                        },
+                        x: {
+                            ticks: { color: '#e2e8f0' }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            labels: { color: '#e2e8f0' }
+                        }
+                    }
+                }
+            });
+        }
+
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            clearError();
+
+            const name = document.getElementById('itemName').value.trim();
+            const quantityValue = document.getElementById('quantity').value.trim();
+
+            if (!name) {
+                showError('Item Name cannot be empty.');
+                return;
+            }
+
+            if (quantityValue === '') {
+                showError('Quantity is required.');
+                return;
+            }
+
+            if (!/^[0-9]+$/.test(quantityValue)) {
+                showError('Quantity must be a non-negative number with no letters.');
+                return;
+            }
+
+            const quantity = parseInt(quantityValue, 10);
+
+            if (quantity < 0) {
+                showError('Quantity cannot be negative.');
+                return;
+            }
+
+            const duplicate = items.some(
+                item => item.name.toLowerCase() === name.toLowerCase()
+            );
+            if (duplicate) {
+                showError('An item with this name already exists.');
+                return;
+            }
+
+            items.push({ name, quantity });
+            localStorage.setItem('inventory', JSON.stringify(items));
+            renderTable();
+            renderChart();
+            form.reset();
+        });
+
+        clearAllBtn.addEventListener('click', () => {
+            clearError();
+            items = [];
+            localStorage.removeItem('inventory');
+            renderTable();
+            renderChart();
+        });
+
+        renderTable();
+        renderChart();
+    </script>
+
+</body>
+</html>
